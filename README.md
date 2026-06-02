@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Trust, But Verify: Human-in-the-Loop for Agents That Actually Matter
+
+Demo app for the CascadiaJS (and AI World Fair SF) conference talk on Human-in-the-Loop (HIL) patterns for AI agents.
+
+**The premise:** An AI-powered flight booking assistant that escalates in stakes with every step — each step triggering a different HIL pattern. The audience never context-switches between demos; they watch the same app with the stakes going up.
+
+---
+
+## The Four HIL Patterns (in order)
+
+| # | Pattern | Trigger | Stakes |
+|---|---------|---------|--------|
+| 1 | AI SDK Interrupt | Agent needs missing info (seat preference) before proceeding | Low — conversational gap-fill |
+| 2 | Auth0 Token Vault | Agent hits an OAuth boundary (Google Calendar not connected) | Medium — permission expansion |
+| 3 | Stripe Link | Agent finds a promo, applies it, then requests payment approval | High — real money moving |
+| 4 | Auth0 CIBA + Guardian Push | External trigger (airline seat upgrade) requires human re-auth | Peak — agent acts on your behalf without your instigation |
+
+---
+
+## Tech Stack
+
+- **Framework:** Next.js (App Router)
+- **Agent:** Vercel AI SDK
+- **Auth:** Auth0 — authentication, Token Vault, CIBA, Guardian push notifications
+- **Payments:** Stripe Link
+- **Database:** Neon (Postgres via Prisma) — SQLite locally
+- **Flight data:** Mock JSON (no real flights API)
+- **Hosting:** Vercel
+
+### Intentionally excluded
+- Resend — Auth0 handles all emails natively via CIBA
+- Vercel Queues — no long-running background tasks in this demo
+- Vercel Blob — no file uploads needed
+- Vercel AI Gateway — adds nothing to the demo narrative
+
+---
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Copy `.env.example` to `.env.local` and fill in your Auth0, Stripe, and Neon credentials.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## Key Design Principles
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Match the interruption to the consequence.** Don't use a push notification where a confirm button will do. Don't use a confirm button where real money is moving.
+- **The agent surfaces the need, it doesn't just hit a wall.** The best HIL moments are when the agent detects something contextual and defers gracefully.
+- **One cohesive app, escalating stakes.** All four patterns live in the same flight booking flow.

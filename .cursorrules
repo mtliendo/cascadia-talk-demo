@@ -1,0 +1,52 @@
+# Project: Trust, But Verify — CascadiaJS Demo App
+
+This is a live conference demo app, not a production product. Every architectural decision should serve the demo narrative first.
+
+## What this app is
+
+An AI-powered flight booking assistant that demonstrates four Human-in-the-Loop (HIL) patterns in escalating order of consequence. The entire app is one cohesive flow — the user books a flight and the stakes rise with each step.
+
+## The four demo moments (in order)
+
+1. **AI SDK Interrupt** — Agent asks for seat preference inline before booking. Simple conversational gap-fill.
+2. **Auth0 Token Vault** — Agent can't add the flight to Google Calendar because the OAuth connection doesn't exist yet. User goes to settings and connects their account.
+3. **Stripe Link** — Agent hunts for a promo code, applies it, then fires a Stripe Link payment approval. Human approves. Money moves.
+4. **Auth0 CIBA + Guardian Push** — Airline upgrades the seat as a loyalty perk. Because exit rows carry safety responsibilities, Auth0 sends an email + Guardian push notification to the presenter's phone on stage. Presenter taps approve. This is the emotional peak — give it room.
+
+## Tech stack
+
+- **Next.js** (App Router) — framework
+- **Vercel AI SDK** — agent and interrupt pattern
+- **Auth0** — login, Token Vault (OAuth connections), CIBA, Guardian push
+- **Stripe Link** — payment approval flow
+- **Neon** (Postgres via Prisma) — database; SQLite locally
+- **Mock JSON** — flight data (no real airline API)
+
+## What is intentionally NOT in this stack
+
+Do not suggest or add these — they were explicitly excluded:
+- Resend or any email service (Auth0 CIBA handles email)
+- Vercel Queues or SQS (no long-running background tasks)
+- Vercel Blob or S3 (no file uploads)
+- Vercel AI Gateway (adds nothing to the demo narrative)
+
+## Code style rules
+
+- This is a demo. Prefer clarity and explicitness over abstraction.
+- Do not add error handling, retry logic, or edge-case guards that would clutter the demo. Handle only what's visible on stage.
+- Keep each HIL pattern isolated — don't let implementation of one pattern bleed into another.
+- Server Components and Server Actions are preferred over API routes where possible.
+- Mock data lives in a single JSON file. Do not introduce a real flights API.
+
+## Auth0 specifics
+
+- Token Vault stores the user's third-party OAuth tokens (Google Calendar). The agent requests the token; if it's missing, the agent surfaces the gap to the user.
+- CIBA (Client-Initiated Backchannel Authentication) is the mechanism for the seat upgrade confirmation. It triggers both email and Guardian push. This is a re-authorization event, not just a notification.
+
+## Stripe specifics
+
+- Stripe Link is used for the payment approval step. The agent does the promo hunting and cart math; the human controls when money moves.
+
+## The mental model to keep in mind
+
+The axis is: **how fast does this need a response** vs **how much is at stake**. Every HIL pattern sits at a different point on that axis. Code and UX should make that distinction obvious to an audience watching on a projector.
