@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { auth0 } from '@/lib/auth0'
 import { ChatInterface } from '@/components/chat-interface'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Bot, LogOut, Settings } from 'lucide-react'
 
@@ -54,11 +54,9 @@ export default async function DashboardPage() {
             <span className="text-sm text-muted-foreground hidden sm:block">
               {user.name ?? user.email}
             </span>
-            <Link href="/auth/logout">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <LogOut className="w-4 h-4" />
-              </Button>
-            </Link>
+            <a href="/auth/logout" aria-label="Sign out" className={buttonVariants({ variant: 'ghost', size: 'icon' })}>
+              <LogOut className="w-4 h-4" />
+            </a>
           </div>
         </div>
       </header>

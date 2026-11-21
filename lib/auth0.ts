@@ -1,8 +1,10 @@
 import { Auth0Client } from '@auth0/nextjs-auth0/server'
 
 export const auth0 = new Auth0Client({
+  enableAccessTokenEndpoint: false,
   enableConnectAccountEndpoint: true,
   authorizationParameters: { scope: 'openid profile email offline_access' },
+  session: { rolling: false, absoluteDuration: 8 * 60 * 60 },
 })
 
 export const googleConnection = process.env.AUTH0_GOOGLE_CONNECTION ?? 'google-oauth2'

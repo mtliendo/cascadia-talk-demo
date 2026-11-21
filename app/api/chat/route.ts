@@ -1,15 +1,16 @@
 import { createHash, createHmac } from 'node:crypto'
 import { anthropic } from '@ai-sdk/anthropic'
 import { streamText, tool, convertToModelMessages, stepCountIs, gateway, validateUIMessages, type UIMessage } from 'ai'
+import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { auth0, getGoogleToken } from '@/lib/auth0'
 import { hasPendingApproval } from '@/lib/chat-approvals'
 import { findFlights, getFlightById, generateSeats, applyPromo } from '@/lib/flights'
 
-export async function POST(req: Request) {
-  const session = await auth0.getSession()
+export async function POST(req: NextRequest) {
+  const session = await auth0.getSession(req)
   if (!session) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    return Response.json({ error: 'Unauthorized' }, { status: 401, headers: { 'Cache-Control': 'private, no-store' } })
   }
 
   if (!req.headers.get('content-type')?.startsWith('application/json')) {

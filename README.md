@@ -46,6 +46,8 @@ Copy `.env.example` to `.env.local`. Register your origin and `/auth/callback` U
 
 For Calendar, enable the Refresh Token and Token Vault grants and grant the app user access to the My Account API with only `create:me:connected_accounts`. Give its refresh token policy the same audience and scope. Configure a separate Google connected-account connection with offline access and the `calendar.events` scope, and set `AUTH0_GOOGLE_CONNECTION` to its name. Enable only the login and Calendar connections for this app. Google may limit consent to test users unless its OAuth app is published and verified.
 
+Sign in or sign up with email and password. Google is intentionally not a sign-in option: connect it from Settings after signing in so Calendar consent is a separate Token Vault step.
+
 ---
 
 ## Key Design Principles

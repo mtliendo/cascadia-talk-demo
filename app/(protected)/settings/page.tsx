@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { auth0, getGoogleToken, googleConnectUrl } from '@/lib/auth0'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -60,12 +60,10 @@ export default async function SettingsPage() {
             <Separator orientation="vertical" className="h-5" />
             <span className="text-sm text-muted-foreground">Settings</span>
           </div>
-          <Link href="/auth/logout">
-            <Button variant="ghost" size="sm" className="gap-2">
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline text-sm">Sign out</span>
-            </Button>
-          </Link>
+          <a href="/auth/logout" aria-label="Sign out" className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'gap-2' })}>
+            <LogOut className="w-4 h-4" />
+            <span className="hidden sm:inline text-sm">Sign out</span>
+          </a>
         </div>
       </header>
 

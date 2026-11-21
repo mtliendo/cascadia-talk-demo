@@ -1,5 +1,4 @@
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   ArrowRight,
@@ -85,12 +84,10 @@ export default function HomePage() {
               hil-patterns
             </a>
           </nav>
-          <Link href="/auth/login?returnTo=/dashboard">
-            <Button size="sm" className="gap-1.5">
-              Sign in
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Button>
-          </Link>
+          <a href="/auth/login?returnTo=/dashboard" className={buttonVariants({ size: 'sm', className: 'gap-1.5' })}>
+            Sign in
+            <ArrowRight className="w-3.5 h-3.5" />
+          </a>
         </div>
       </header>
 
@@ -125,12 +122,10 @@ export default function HomePage() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 animate-in fade-in slide-in-from-bottom-4 duration-700 [animation-delay:300ms] [animation-fill-mode:both]">
-            <Link href="/auth/login?returnTo=/dashboard">
-              <Button size="lg" className="gap-2 h-11 px-6">
-                Try the demo
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
+            <a href="/auth/login?returnTo=/dashboard" className={buttonVariants({ size: 'lg', className: 'gap-2 h-11 px-6' })}>
+              Try the demo
+              <ArrowRight className="w-4 h-4" />
+            </a>
             <a href="#how-it-works">
               <Button variant="ghost" size="lg" className="h-11 px-6 text-muted-foreground">
                 See how it works
@@ -226,12 +221,10 @@ export default function HomePage() {
             ))}
           </div>
           <div className="mt-16 text-center">
-            <Link href="/auth/login?returnTo=/dashboard">
-              <Button size="lg" className="gap-2 h-11 px-8">
-                See it live
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
+            <a href="/auth/login?returnTo=/dashboard" className={buttonVariants({ size: 'lg', className: 'gap-2 h-11 px-8' })}>
+              See it live
+              <ArrowRight className="w-4 h-4" />
+            </a>
           </div>
         </div>
       </section>
