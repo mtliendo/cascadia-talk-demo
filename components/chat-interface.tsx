@@ -7,7 +7,7 @@ import {
   lastAssistantMessageIsCompleteWithApprovalResponses,
   type UIMessage,
 } from 'ai'
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useSyncExternalStore } from 'react'
 import { Streamdown } from 'streamdown'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -46,42 +46,37 @@ function loadStoredMessages(storageKey: string): UIMessage[] {
   }
 }
 
-export function ChatInterface({ userInitials, storageKey }: { userInitials: string; storageKey: string }) {
+type ChatProps = { userInitials: string; storageKey: string }
+
+const subscribeToHydration = () => () => {}
+
+export function ChatInterface(props: ChatProps) {
+  const hydrated = useSyncExternalStore(subscribeToHydration, () => true, () => false)
+  return hydrated ? <Chat key={props.storageKey} {...props} /> : null
+}
+
+function Chat({ userInitials, storageKey }: ChatProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [input, setInput] = useState('')
-  const [showSuggestions, setShowSuggestions] = useState(true)
-  const [isHydrated, setIsHydrated] = useState(false)
+  const [initialMessages] = useState(() => loadStoredMessages(storageKey))
 
   const { messages, sendMessage, status, error, setMessages, addToolApprovalResponse } = useChat({
+    messages: initialMessages,
     transport: new DefaultChatTransport({ api: '/api/chat' }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
   })
 
-  // Load history from localStorage after mount, not as initial state — the
-  // server always renders an empty chat, so hydrating with stored messages
-  // directly would create a server/client markup mismatch.
   useEffect(() => {
-    const stored = loadStoredMessages(storageKey)
-    if (stored.length > 0) {
-      setMessages(stored)
-      setShowSuggestions(false)
-    }
-    setIsHydrated(true)
-  }, [setMessages, storageKey])
-
-  useEffect(() => {
-    if (!isHydrated || typeof window === 'undefined') return
     try {
       window.sessionStorage.setItem(storageKey, JSON.stringify(messages))
     } catch {
       // Chat still works when session storage is unavailable.
     }
-  }, [messages, isHydrated, storageKey])
+  }, [messages, storageKey])
 
   function clearChat() {
     setMessages([])
-    setShowSuggestions(true)
     if (typeof window !== 'undefined') {
       try { window.sessionStorage.removeItem(storageKey) } catch {}
     }
@@ -102,7 +97,6 @@ export function ChatInterface({ userInitials, storageKey }: { userInitials: stri
   async function handleSend(text: string) {
     if (!text.trim() || isLoading) return
     setInput('')
-    setShowSuggestions(false)
     await sendMessage({ text })
   }
 
@@ -132,7 +126,7 @@ export function ChatInterface({ userInitials, storageKey }: { userInitials: stri
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
-        {messages.length === 0 && showSuggestions && (
+        {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-6 text-center py-8 animate-in fade-in duration-500">
             <div className="w-14 h-14 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center">
               <Plane className="w-6 h-6 text-primary" />
