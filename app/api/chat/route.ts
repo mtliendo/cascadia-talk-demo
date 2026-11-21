@@ -1,11 +1,21 @@
 import { createHash, createHmac } from 'node:crypto'
 import { anthropic } from '@ai-sdk/anthropic'
-import { streamText, tool, convertToModelMessages, stepCountIs, gateway, validateUIMessages, type UIMessage } from 'ai'
+import { streamText, tool, convertToModelMessages, stepCountIs, gateway, validateUIMessages, isStaticToolUIPart, type UIMessage } from 'ai'
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { auth0, getGoogleToken } from '@/lib/auth0'
 import { hasPendingApproval } from '@/lib/chat-approvals'
-import { findFlights, getFlightById, generateSeats, applyPromo } from '@/lib/flights'
+import { findFlights, getFlightById, generateSeats, applyPromo, getSeatUpgrade } from '@/lib/flights'
+
+const heldBookingSchema = z.object({
+  success: z.literal(true),
+  booking: z.object({
+    status: z.literal('held'),
+    confirmationCode: z.string(),
+    flight: z.object({ id: z.string() }),
+    seatId: z.string(),
+  }),
+})
 
 export async function POST(req: NextRequest) {
   const session = await auth0.getSession(req)
@@ -30,6 +40,22 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'Approve or decline before continuing the chat.' }, { status: 409 })
   }
 
+  const heldBookings = new Map<string, { flightId: string; seatId: string }>()
+  for (const message of messages) {
+    if (message.role !== 'assistant') continue
+    for (const part of message.parts) {
+      if (!isStaticToolUIPart(part) || part.type !== 'tool-bookFlight' || part.state !== 'output-available') continue
+      const result = heldBookingSchema.safeParse(part.output)
+      if (!result.success) continue
+      const { confirmationCode, flight, seatId } = result.data.booking
+      heldBookings.set(confirmationCode, { flightId: flight.id, seatId })
+    }
+  }
+  const getOffer = (confirmationCode: string) => {
+    const booking = heldBookings.get(confirmationCode)
+    return booking && getSeatUpgrade(booking.flightId, booking.seatId)
+  }
+
   const result = streamText({
     model: process.env.VERCEL === '1' && !process.env.ANTHROPIC_API_KEY
       ? gateway('anthropic/claude-sonnet-4.6')
@@ -47,7 +73,7 @@ Key behaviors:
 - Before holding a flight, ask the user for a seat preference if they have not provided one or selected a seat. Do not choose for them.
 - When adding to Google Calendar, use checkGoogleCalendar first. If disconnected, tell the user to open Settings in a separate tab, connect Google, then return and retry.
 - For a demo payment, look for a promo code first, then request in-app approval. This simulates Stripe Link; never say anything was sent to Stripe or that money moved.
-- Only surface a simulated seat upgrade when prompted. Its in-app approval demonstrates where CIBA/Guardian would fit; no email or push is sent.
+- Only surface a simulated seat upgrade when prompted. Use the current and offered seats from checkSeatUpgrade and request approval only for that offer. No email or push is sent.
 - Never retry a tool execution the user denied.
 
 Be conversational, helpful, and transparent about what you're doing and why you're stopping to ask.`,
@@ -102,11 +128,13 @@ Be conversational, helpful, and transparent about what you're doing and why you'
           }
 
           const holdExpiry = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
+          const confirmationCode = `FM-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+          heldBookings.set(confirmationCode, { flightId, seatId })
 
           return {
             success: true,
             booking: {
-              confirmationCode: `FM-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+              confirmationCode,
               flight,
               seatId,
               seatPreference,
@@ -250,11 +278,13 @@ Be conversational, helpful, and transparent about what you're doing and why you'
           confirmationCode: z.string(),
         }),
         execute: async ({ confirmationCode }) => {
+          const offer = getOffer(confirmationCode)
+          if (!offer) return { upgradeAvailable: false }
+
           return {
             upgradeAvailable: true,
             confirmationCode,
-            currentSeat: '27B',
-            upgradeSeat: '13C',
+            ...offer,
             upgradeType: 'Exit row — extra legroom',
             reason: 'Loyalty program perk',
             requiresConfirmation: true,
@@ -272,6 +302,10 @@ Be conversational, helpful, and transparent about what you're doing and why you'
           upgradeSeat: z.string(),
         }),
         execute: async ({ confirmationCode, upgradeSeat }) => {
+          if (getOffer(confirmationCode)?.upgradeSeat !== upgradeSeat) {
+            return { error: 'No matching demo seat upgrade is available.' }
+          }
+
           return {
             simulated: true,
             confirmationCode,

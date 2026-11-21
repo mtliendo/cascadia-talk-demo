@@ -155,6 +155,15 @@ export function getFlightById(id: string, now?: Date): Flight | undefined {
   return getFlights(now).find((f) => f.id === id)
 }
 
+export function getSeatUpgrade(flightId: string, seatId: string) {
+  if (!getFlightById(flightId)) return
+  const seats = generateSeats(flightId)
+  const currentSeat = seats.find(seat => seat.id === seatId && seat.available)
+  if (!currentSeat || currentSeat.exitRow) return
+  const upgradeSeat = seats.find(seat => seat.available && seat.exitRow && seat.type === currentSeat.type)
+  if (upgradeSeat) return { currentSeat: currentSeat.id, upgradeSeat: upgradeSeat.id }
+}
+
 export function applyPromo(flight: Flight, code: string): number {
   if (flight.promoCode && flight.promoCode.toUpperCase() === code.toUpperCase()) {
     return Math.round(flight.price * (1 - (flight.promoDiscount ?? 0) / 100))
