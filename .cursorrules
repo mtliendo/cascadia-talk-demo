@@ -28,7 +28,7 @@ Do not suggest or add these — they were explicitly excluded:
 - Resend or any email service (Auth0 CIBA handles email)
 - Vercel Queues or SQS (no long-running background tasks)
 - Vercel Blob or S3 (no file uploads)
-- Vercel AI Gateway (adds nothing to the demo narrative)
+- Vercel AI Gateway as a local requirement; the hosted Vercel demo can use the team's existing Gateway via OIDC when no direct provider key is configured.
 
 ## Code style rules
 

@@ -1,4 +1,5 @@
 import { createHash, createHmac } from 'node:crypto'
+import { anthropic } from '@ai-sdk/anthropic'
 import { streamText, tool, convertToModelMessages, stepCountIs, gateway, validateUIMessages, type UIMessage } from 'ai'
 import { z } from 'zod'
 import { auth0, getGoogleToken } from '@/lib/auth0'
@@ -29,7 +30,9 @@ export async function POST(req: Request) {
   }
 
   const result = streamText({
-    model: gateway('anthropic/claude-sonnet-4.6'),
+    model: process.env.VERCEL === '1' && !process.env.ANTHROPIC_API_KEY
+      ? gateway('anthropic/claude-sonnet-4.6')
+      : anthropic('claude-sonnet-4-6'),
     maxOutputTokens: 1200,
     experimental_toolApprovalSecret: createHmac('sha256', process.env.AUTH0_SECRET!)
       .update(`flightmind-approval:${session.user.sub}`)

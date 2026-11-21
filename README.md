@@ -20,7 +20,7 @@ Demo app for the CascadiaJS (and AI World Fair SF) conference talk on Human-in-t
 ## Tech Stack
 
 - **Framework:** Next.js (App Router)
-- **Agent:** Vercel AI SDK with Vercel AI Gateway
+- **Agent:** Vercel AI SDK with the direct Anthropic provider locally
 - **Auth:** Auth0 Universal Login and Token Vault for Google Calendar
 - **Chat history:** This browser tab only, scoped to the signed-in account; no database
 - **Flight data:** Mock JSON (no real flights API)
@@ -42,7 +42,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-Copy `.env.example` to `.env.local`. Register your origin and `/auth/callback` URL on a dedicated Auth0 Regular Web Application, and use `openssl rand -hex 32` for `AUTH0_SECRET`. Use your own AI Gateway key locally; deployed Vercel Functions use Vercel OIDC without a key. Set a project budget before making the app public.
+Copy `.env.example` to `.env.local`. Register your origin and `/auth/callback` URL on a dedicated Auth0 Regular Web Application, and use `openssl rand -hex 32` for `AUTH0_SECRET`. Set `ANTHROPIC_API_KEY` for local chat. The hosted Vercel demo can instead use the team's existing AI Gateway via OIDC, with a project budget, when no direct provider key is configured.
 
 For Calendar, enable the Refresh Token and Token Vault grants and grant the app user access to the My Account API with only `create:me:connected_accounts`. Give its refresh token policy the same audience and scope. Configure a separate Google connected-account connection with offline access and the `calendar.events` scope, and set `AUTH0_GOOGLE_CONNECTION` to its name. Enable only the login and Calendar connections for this app. Google may limit consent to test users unless its OAuth app is published and verified.
 
