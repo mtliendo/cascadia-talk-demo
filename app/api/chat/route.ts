@@ -1,7 +1,8 @@
 import { createHash, createHmac } from 'node:crypto'
-import { streamText, tool, convertToModelMessages, stepCountIs, gateway, type UIMessage } from 'ai'
+import { streamText, tool, convertToModelMessages, stepCountIs, gateway, validateUIMessages, type UIMessage } from 'ai'
 import { z } from 'zod'
 import { auth0, getGoogleToken } from '@/lib/auth0'
+import { hasPendingApproval } from '@/lib/chat-approvals'
 import { findFlights, getFlightById, generateSeats, applyPromo } from '@/lib/flights'
 
 export async function POST(req: Request) {
@@ -19,10 +20,12 @@ export async function POST(req: Request) {
   }
   let messages: UIMessage[]
   try {
-    ({ messages } = JSON.parse(raw))
-    if (!Array.isArray(messages) || messages.length === 0) throw new Error('Missing messages')
+    messages = await validateUIMessages({ messages: JSON.parse(raw).messages })
   } catch {
     return Response.json({ error: 'Invalid messages' }, { status: 400 })
+  }
+  if (messages.some(hasPendingApproval)) {
+    return Response.json({ error: 'Approve or decline before continuing the chat.' }, { status: 409 })
   }
 
   const result = streamText({

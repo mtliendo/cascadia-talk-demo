@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
+import { hasPendingApproval } from '@/lib/chat-approvals'
 import {
   ArrowUp,
   Bot,
@@ -83,6 +84,8 @@ function Chat({ userInitials, storageKey }: ChatProps) {
   }
 
   const isLoading = status === 'streaming' || status === 'submitted'
+  const approvalPending = hasPendingApproval(messages.at(-1))
+  const canSend = !isLoading && !approvalPending
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -95,7 +98,7 @@ function Chat({ userInitials, storageKey }: ChatProps) {
   ]
 
   async function handleSend(text: string) {
-    if (!text.trim() || isLoading) return
+    if (!text.trim() || !canSend) return
     setInput('')
     await sendMessage({ text })
   }
@@ -192,7 +195,8 @@ function Chat({ userInitials, storageKey }: ChatProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask me to find or book a flight…"
+            placeholder={approvalPending ? 'Approve or decline to continue…' : 'Ask me to find or book a flight…'}
+            disabled={approvalPending}
             rows={1}
             className="flex-1 bg-transparent resize-none outline-none text-sm text-foreground placeholder:text-muted-foreground leading-relaxed max-h-32 overflow-y-auto"
           />
@@ -200,7 +204,7 @@ function Chat({ userInitials, storageKey }: ChatProps) {
             type="button"
             size="icon"
             onClick={() => handleSend(input)}
-            disabled={isLoading || !input.trim()}
+            disabled={!canSend || !input.trim()}
             className="shrink-0 h-7 w-7 rounded-lg"
           >
             {isLoading ? (
