@@ -11,19 +11,18 @@ Demo app for the CascadiaJS (and AI World Fair SF) conference talk on Human-in-t
 | # | Pattern | Trigger | Stakes |
 |---|---------|---------|--------|
 | 1 | AI SDK Interrupt | Agent needs missing info (seat preference) before proceeding | Low — conversational gap-fill |
-| 2 | Auth0 Token Vault | Agent hits an OAuth boundary (Google Calendar not connected) | Medium — permission expansion |
-| 3 | Stripe Link | Agent finds a promo, applies it, then requests payment approval | High — real money moving |
-| 4 | Auth0 CIBA + Guardian Push | External trigger (airline seat upgrade) requires human re-auth | Peak — agent acts on your behalf without your instigation |
+| 2 | Auth0 Token Vault | The user connects Google Calendar and approves adding the flight | Medium — real consent and calendar write |
+| 3 | Simulated Stripe Link | Agent finds a promo, then requests in-app approval | No Stripe request or charge |
+| 4 | Simulated Auth0 CIBA + Guardian | Agent surfaces the sample seat upgrade and requests in-app approval | No email or push notification |
 
 ---
 
 ## Tech Stack
 
 - **Framework:** Next.js (App Router)
-- **Agent:** Vercel AI SDK
-- **Auth:** Auth0 — authentication, Token Vault, CIBA, Guardian push notifications
-- **Payments:** Stripe Link
-- **Database:** Neon (Postgres via Prisma) — SQLite locally
+- **Agent:** Vercel AI SDK with Vercel AI Gateway
+- **Auth:** Auth0 Universal Login and Token Vault for Google Calendar
+- **Chat history:** This browser tab only, scoped to the signed-in account; no database
 - **Flight data:** Mock JSON (no real flights API)
 - **Hosting:** Vercel
 
@@ -31,7 +30,6 @@ Demo app for the CascadiaJS (and AI World Fair SF) conference talk on Human-in-t
 - Resend — Auth0 handles all emails natively via CIBA
 - Vercel Queues — no long-running background tasks in this demo
 - Vercel Blob — no file uploads needed
-- Vercel AI Gateway — adds nothing to the demo narrative
 
 ---
 
@@ -44,7 +42,9 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-Copy `.env.example` to `.env.local` and fill in your Auth0, Stripe, and Neon credentials.
+Copy `.env.example` to `.env.local`. Register your origin and `/auth/callback` URL on a dedicated Auth0 Regular Web Application, and use `openssl rand -hex 32` for `AUTH0_SECRET`. Use your own AI Gateway key locally; deployed Vercel Functions use Vercel OIDC without a key. Set a project budget before making the app public.
+
+For Calendar, enable the Refresh Token and Token Vault grants and grant the app user access to the My Account API with only `create:me:connected_accounts`. Give its refresh token policy the same audience and scope. Configure a separate Google connected-account connection with offline access and the `calendar.events` scope, and set `AUTH0_GOOGLE_CONNECTION` to its name. Enable only the login and Calendar connections for this app. Google may limit consent to test users unless its OAuth app is published and verified.
 
 ---
 

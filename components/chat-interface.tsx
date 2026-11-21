@@ -1,7 +1,12 @@
 'use client'
 
 import { useChat } from '@ai-sdk/react'
-import { DefaultChatTransport, isToolOrDynamicToolUIPart, type UIMessage } from 'ai'
+import {
+  DefaultChatTransport,
+  isToolOrDynamicToolUIPart,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
+  type UIMessage,
+} from 'ai'
 import { useRef, useEffect, useState } from 'react'
 import { Streamdown } from 'streamdown'
 import { Button } from '@/components/ui/button'
@@ -24,60 +29,61 @@ const TOOL_LABELS: Record<string, string> = {
   checkGoogleCalendar: 'Checking calendar access',
   addToCalendar: 'Adding to calendar',
   findPromoCode: 'Hunting for promo codes',
-  initiatePayment: 'Requesting payment approval',
+  initiatePayment: 'Simulated Stripe Link payment',
   checkSeatUpgrade: 'Checking seat upgrade',
-  initiateSeatsUpgradeCIBA: 'Initiating Guardian push',
+  initiateSeatsUpgradeCIBA: 'Simulated CIBA/Guardian upgrade',
 }
 
-const CHAT_STORAGE_KEY = 'flightmind-chat-history'
+type RespondToApproval = (response: { id: string; approved: boolean }) => void
 
-function loadStoredMessages(): UIMessage[] {
+function loadStoredMessages(storageKey: string): UIMessage[] {
   if (typeof window === 'undefined') return []
   try {
-    const raw = window.localStorage.getItem(CHAT_STORAGE_KEY)
+    const raw = window.sessionStorage.getItem(storageKey)
     return raw ? JSON.parse(raw) : []
   } catch {
     return []
   }
 }
 
-export function ChatInterface({ userInitials }: { userInitials: string }) {
+export function ChatInterface({ userInitials, storageKey }: { userInitials: string; storageKey: string }) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [input, setInput] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(true)
   const [isHydrated, setIsHydrated] = useState(false)
 
-  const { messages, sendMessage, status, error, setMessages } = useChat({
+  const { messages, sendMessage, status, error, setMessages, addToolApprovalResponse } = useChat({
     transport: new DefaultChatTransport({ api: '/api/chat' }),
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
   })
 
   // Load history from localStorage after mount, not as initial state — the
   // server always renders an empty chat, so hydrating with stored messages
   // directly would create a server/client markup mismatch.
   useEffect(() => {
-    const stored = loadStoredMessages()
+    const stored = loadStoredMessages(storageKey)
     if (stored.length > 0) {
       setMessages(stored)
       setShowSuggestions(false)
     }
     setIsHydrated(true)
-  }, [setMessages])
+  }, [setMessages, storageKey])
 
   useEffect(() => {
     if (!isHydrated || typeof window === 'undefined') return
     try {
-      window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages))
+      window.sessionStorage.setItem(storageKey, JSON.stringify(messages))
     } catch {
-      // localStorage unavailable (e.g. private browsing quota) — chat still works, just won't persist
+      // Chat still works when session storage is unavailable.
     }
-  }, [messages, isHydrated])
+  }, [messages, isHydrated, storageKey])
 
   function clearChat() {
     setMessages([])
     setShowSuggestions(true)
     if (typeof window !== 'undefined') {
-      window.localStorage.removeItem(CHAT_STORAGE_KEY)
+      try { window.sessionStorage.removeItem(storageKey) } catch {}
     }
   }
 
@@ -154,8 +160,13 @@ export function ChatInterface({ userInitials }: { userInitials: string }) {
           </div>
         )}
 
-        {messages.map((message) => (
-          <MessageRow key={message.id} message={message} userInitials={userInitials} />
+        {messages.map((message, index) => (
+          <MessageRow
+            key={message.id}
+            message={message}
+            userInitials={userInitials}
+            respondToApproval={index === messages.length - 1 && !isLoading ? addToolApprovalResponse : undefined}
+          />
         ))}
 
         {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
@@ -216,9 +227,11 @@ export function ChatInterface({ userInitials }: { userInitials: string }) {
 function MessageRow({
   message,
   userInitials,
+  respondToApproval,
 }: {
   message: UIMessage
   userInitials: string
+  respondToApproval?: RespondToApproval
 }) {
   const isUser = message.role === 'user'
 
@@ -243,7 +256,7 @@ function MessageRow({
         )}
       >
         {message.parts.map((part, i) => (
-          <MessagePart key={i} part={part} isUser={isUser} />
+          <MessagePart key={i} part={part} isUser={isUser} respondToApproval={respondToApproval} />
         ))}
       </div>
     </div>
@@ -253,10 +266,11 @@ function MessageRow({
 function MessagePart({
   part,
   isUser,
+  respondToApproval,
 }: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  part: any
+  part: UIMessage['parts'][number]
   isUser: boolean
+  respondToApproval?: RespondToApproval
 }) {
   if (part.type === 'text') {
     if (isUser) {
@@ -283,6 +297,36 @@ function MessagePart({
     const label = TOOL_LABELS[toolName] ?? toolName
     const isPending = state === 'input-streaming' || state === 'input-available'
 
+    if (toolName === 'checkGoogleCalendar' && state === 'output-available' &&
+        (part.output as { connected?: boolean } | undefined)?.connected === false) {
+      return (
+        <a className="text-sm text-primary underline" href="/settings" target="_blank" rel="noopener noreferrer">
+          Connect Google Calendar (opens a new tab)
+        </a>
+      )
+    }
+
+    if (state === 'approval-requested') {
+      const input = part.input as { title?: string; flightId?: string; upgradeSeat?: string }
+      const description = input.title ?? input.flightId ?? input.upgradeSeat
+      return (
+        <div className="space-y-2 rounded-xl border border-border bg-background p-3 text-sm">
+          <p className="font-medium">{label}</p>
+          {description && <p className="text-muted-foreground">{description}</p>}
+          {respondToApproval ? (
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => respondToApproval({ id: part.approval.id, approved: true })}>
+                Approve
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => respondToApproval({ id: part.approval.id, approved: false })}>
+                Decline
+              </Button>
+            </div>
+          ) : <p className="text-muted-foreground">Awaiting approval</p>}
+        </div>
+      )
+    }
+
     return (
       <div className="flex items-center gap-2 text-xs bg-background/80 border border-border/60 rounded-xl px-3 py-2 text-muted-foreground">
         {isPending ? (
@@ -290,7 +334,7 @@ function MessagePart({
         ) : (
           <div className="w-3 h-3 rounded-full bg-emerald-500/20 border border-emerald-500/40 shrink-0" />
         )}
-        <span>{label}</span>
+        <span>{label}{state === 'output-denied' ? ' — declined' : ''}</span>
         {isPending && (
           <Badge variant="secondary" className="ml-auto text-xs py-0 h-4">
             running

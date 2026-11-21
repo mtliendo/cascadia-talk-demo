@@ -37,7 +37,7 @@ const HIL_PATTERNS = [
     icon: CreditCard,
     title: 'Payment Gate',
     description:
-      'The agent hunts promos, does the math, then stops. You approve the Stripe Link payment. Money only moves when you say so.',
+      'The agent hunts promos, does the math, then pauses for a simulated Stripe Link approval. No money moves.',
     color: 'text-emerald-400',
     bg: 'bg-emerald-400/10',
     border: 'border-emerald-400/25',
@@ -47,7 +47,7 @@ const HIL_PATTERNS = [
     icon: Smartphone,
     title: 'External Re-auth',
     description:
-      "The airline upgrades your seat. Because you didn't ask — it did — Auth0 CIBA fires an email and a Guardian push to your phone. You tap approve.",
+      "A simulated airline seat upgrade pauses for your approval. It shows where a CIBA email or Guardian push would fit, without sending either.",
     color: 'text-amber-400',
     bg: 'bg-amber-400/10',
     border: 'border-amber-400/25',
@@ -59,7 +59,7 @@ const TICKER_ITEMS = [
   'ORD → JFK   08:40   BOARDING',
   'AGENT   AWAITING APPROVAL',
   'LHR → SIN   21:05   DELAYED',
-  'CIBA PUSH   SENT TO GUARDIAN',
+  'DEMO UPGRADE   AWAITING APPROVAL',
   'TOKEN VAULT   CREDENTIALS SEALED',
 ]
 
@@ -113,7 +113,7 @@ export default function HomePage() {
           </Badge>
 
           <h1 className="font-heading text-5xl sm:text-6xl md:text-7xl font-medium tracking-tight text-foreground leading-[1.05] animate-in fade-in slide-in-from-bottom-4 duration-700 [animation-delay:100ms] [animation-fill-mode:both]">
-            An AI that books flights.
+            An AI that simulates booking flights.
             <br />
             <span className="italic text-primary">And knows when to stop.</span>
           </h1>
@@ -248,8 +248,8 @@ export default function HomePage() {
               'Vercel AI SDK',
               'Auth0',
               'Token Vault',
-              'CIBA + Guardian',
-              'Stripe Link',
+              'CIBA + Guardian (simulated)',
+              'Stripe Link (simulated)',
               'Neon',
             ].map((tech) => (
               <span

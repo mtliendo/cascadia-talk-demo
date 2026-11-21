@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { createHash } from 'node:crypto'
 import Link from 'next/link'
 import { auth0 } from '@/lib/auth0'
 import { ChatInterface } from '@/components/chat-interface'
@@ -64,7 +65,10 @@ export default async function DashboardPage() {
 
       {/* Chat fills remaining height */}
       <div className="flex-1 overflow-hidden max-w-4xl w-full mx-auto">
-        <ChatInterface userInitials={userInitials} />
+        <ChatInterface
+          userInitials={userInitials}
+          storageKey={`flightmind-chat:${createHash('sha256').update(user.sub).digest('hex')}`}
+        />
       </div>
     </div>
   )

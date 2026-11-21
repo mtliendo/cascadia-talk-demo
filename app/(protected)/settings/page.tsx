@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { auth0, getGoogleToken } from '@/lib/auth0'
+import { auth0, getGoogleToken, googleConnectUrl } from '@/lib/auth0'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -180,7 +180,7 @@ export default async function SettingsPage() {
                   </p>
                   <p className="text-muted-foreground text-xs">
                     {googleConnected
-                      ? 'Auth0 Token Vault is securely managing your Google OAuth tokens. Access tokens are automatically refreshed — you never need to re-authorize.'
+                      ? 'Auth0 Token Vault manages your Google OAuth tokens. You can reconnect if your Google authorization expires or is revoked.'
                       : 'When you connect, Auth0 Token Vault will encrypt and store your Google refresh token. This app never has direct access to your credentials.'}
                   </p>
                 </div>
@@ -189,7 +189,7 @@ export default async function SettingsPage() {
 
             <div className="flex flex-col sm:flex-row gap-3">
               <a
-                href="/auth/connect?connection=google-oauth2&returnTo=/settings"
+                href={googleConnectUrl}
                 className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">

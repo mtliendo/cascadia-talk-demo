@@ -1,12 +1,8 @@
-import { streamText, tool, convertToModelMessages, stepCountIs, type UIMessage } from 'ai'
-import { createAnthropic } from '@ai-sdk/anthropic'
+import { createHash, createHmac } from 'node:crypto'
+import { streamText, tool, convertToModelMessages, stepCountIs, gateway, type UIMessage } from 'ai'
 import { z } from 'zod'
-import { auth0 } from '@/lib/auth0'
+import { auth0, getGoogleToken } from '@/lib/auth0'
 import { findFlights, getFlightById, generateSeats, applyPromo } from '@/lib/flights'
-
-const anthropic = createAnthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-})
 
 export async function POST(req: Request) {
   const session = await auth0.getSession()
@@ -14,20 +10,38 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { messages }: { messages: UIMessage[] } = await req.json()
+  if (!req.headers.get('content-type')?.startsWith('application/json')) {
+    return Response.json({ error: 'Expected JSON' }, { status: 415 })
+  }
+  const raw = await req.text()
+  if (raw.length > 100_000) {
+    return Response.json({ error: 'Clear the chat to start a new trip.' }, { status: 413 })
+  }
+  let messages: UIMessage[]
+  try {
+    ({ messages } = JSON.parse(raw))
+    if (!Array.isArray(messages) || messages.length === 0) throw new Error('Missing messages')
+  } catch {
+    return Response.json({ error: 'Invalid messages' }, { status: 400 })
+  }
 
   const result = streamText({
-    model: anthropic('claude-sonnet-4-6'),
+    model: gateway('anthropic/claude-sonnet-4.6'),
+    maxOutputTokens: 1200,
+    experimental_toolApprovalSecret: createHmac('sha256', process.env.AUTH0_SECRET!)
+      .update(`flightmind-approval:${session.user.sub}`)
+      .digest('hex'),
     system: `You are FlightMind, an AI flight booking assistant. You help users find and book flights from San Francisco to Chicago (the demo route).
 
 You have access to tools for searching flights, holding bookings, adding calendar events, finding promo codes, initiating payments, and handling seat upgrades.
 
 Key behaviors:
 - Always search for flights before booking
-- Before booking, ask about seat preferences if not provided (this is Demo 1: AI SDK Interrupt)
-- When adding to Google Calendar, the user may need to connect their account first — tell them to visit /settings if you get a permission error (this is Demo 2: Token Vault)
-- For payment, always look for a promo code first, then initiate the Stripe Link flow (Demo 3)
-- Seat upgrades are handled via CIBA push (Demo 4) — only surface this when prompted
+- Before holding a flight, ask the user for a seat preference if they have not provided one or selected a seat. Do not choose for them.
+- When adding to Google Calendar, use checkGoogleCalendar first. If disconnected, tell the user to open Settings in a separate tab, connect Google, then return and retry.
+- For a demo payment, look for a promo code first, then request in-app approval. This simulates Stripe Link; never say anything was sent to Stripe or that money moved.
+- Only surface a simulated seat upgrade when prompted. Its in-app approval demonstrates where CIBA/Guardian would fit; no email or push is sent.
+- Never retry a tool execution the user denied.
 
 Be conversational, helpful, and transparent about what you're doing and why you're stopping to ask.`,
     messages: await convertToModelMessages(messages),
@@ -75,6 +89,11 @@ Be conversational, helpful, and transparent about what you're doing and why you'
           const flight = getFlightById(flightId)
           if (!flight) return { error: 'Flight not found' }
 
+          const seat = generateSeats(flightId).find(seat => seat.id === seatId)
+          if (!seat?.available || (seatPreference && seat.type !== seatPreference)) {
+            return { error: 'That seat is unavailable or does not match the requested preference.' }
+          }
+
           const holdExpiry = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
 
           return {
@@ -96,38 +115,31 @@ Be conversational, helpful, and transparent about what you're doing and why you'
         description: "Check if the user's Google Calendar is connected via Token Vault",
         inputSchema: z.object({}),
         execute: async () => {
-          try {
-            const { token } = await auth0.getAccessTokenForConnection({
-              connection: 'google-oauth2',
-            })
-            return { connected: true, hasToken: !!token }
-          } catch {
-            return {
+          const google = await getGoogleToken()
+          return 'token' in google
+            ? { connected: true }
+            : {
               connected: false,
               message:
                 'Google Calendar is not connected. Ask the user to visit /settings to connect their account.',
             }
-          }
         },
       }),
 
       addToCalendar: tool({
         description: 'Add a flight to the user Google Calendar',
+        needsApproval: true,
         inputSchema: z.object({
           flightId: z.string(),
           title: z.string(),
           description: z.string(),
         }),
-        execute: async ({ flightId, title, description }) => {
+        execute: async ({ flightId, title, description }, { toolCallId }) => {
           const flight = getFlightById(flightId)
           if (!flight) return { error: 'Flight not found' }
 
-          let token: string
-          try {
-            ;({ token } = await auth0.getAccessTokenForConnection({
-              connection: 'google-oauth2',
-            }))
-          } catch {
+          const google = await getGoogleToken()
+          if (!('token' in google)) {
             return {
               success: false,
               error: 'Google Calendar not connected',
@@ -135,29 +147,32 @@ Be conversational, helpful, and transparent about what you're doing and why you'
             }
           }
 
-          const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+          const eventId = createHash('sha256').update(JSON.stringify([session.user.sub, toolCallId])).digest('hex')
           const response = await fetch(
             'https://www.googleapis.com/calendar/v3/calendars/primary/events',
             {
               method: 'POST',
               headers: {
-                Authorization: `Bearer ${token}`,
+                Authorization: `Bearer ${google.token}`,
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
+                id: eventId,
                 summary: title,
                 description,
-                start: { dateTime: flight.departureTime, timeZone },
-                end: { dateTime: flight.arrivalTime, timeZone },
+                start: { dateTime: flight.departureTime, timeZone: 'America/Los_Angeles' },
+                end: { dateTime: flight.arrivalTime, timeZone: 'America/Chicago' },
               }),
             }
           )
 
+          if (response.status === 409) {
+            return { success: true, message: 'This approved flight is already on your Google Calendar.' }
+          }
           if (!response.ok) {
             return {
               success: false,
               error: `Google Calendar API error (${response.status})`,
-              details: await response.text(),
             }
           }
 
@@ -204,25 +219,20 @@ Be conversational, helpful, and transparent about what you're doing and why you'
       }),
 
       initiatePayment: tool({
-        description: 'Initiate a Stripe Link payment request for the user to approve',
+        description: 'Request approval for a simulated Stripe Link payment. No money moves.',
+        needsApproval: true,
         inputSchema: z.object({
           flightId: z.string(),
-          amount: z.number().describe('Final amount in USD after any discounts'),
           promoCode: z.string().optional(),
         }),
-        execute: async ({ flightId, amount, promoCode }) => {
+        execute: async ({ flightId, promoCode }) => {
           const flight = getFlightById(flightId)
           if (!flight) return { error: 'Flight not found' }
 
           return {
-            paymentInitiated: true,
-            stripeSessionId: `cs_demo_${Math.random().toString(36).slice(2, 10)}`,
-            amount,
-            promoApplied: !!promoCode,
-            promoCode,
-            message:
-              'Payment request sent via Stripe Link. Waiting for your approval to complete the transaction.',
-            status: 'pending_approval',
+            simulated: true,
+            amount: promoCode ? applyPromo(flight, promoCode) : flight.price,
+            message: 'Demo payment approved. No Stripe request or charge was made.',
           }
         },
       }),
@@ -242,27 +252,24 @@ Be conversational, helpful, and transparent about what you're doing and why you'
             reason: 'Loyalty program perk',
             requiresConfirmation: true,
             message:
-              'Exit row assignment carries safety responsibilities. Confirmation required via Auth0 CIBA.',
+              'Exit row assignment carries safety responsibilities. The simulated upgrade requires approval.',
           }
         },
       }),
 
       initiateSeatsUpgradeCIBA: tool({
-        description:
-          'Trigger Auth0 CIBA flow to confirm an exit row seat upgrade via email + Guardian push',
+        description: 'Request approval for a simulated CIBA seat upgrade. No notification is sent.',
+        needsApproval: true,
         inputSchema: z.object({
           confirmationCode: z.string(),
           upgradeSeat: z.string(),
         }),
         execute: async ({ confirmationCode, upgradeSeat }) => {
           return {
-            cibaInitiated: true,
+            simulated: true,
             confirmationCode,
             upgradeSeat,
-            channels: ['email', 'guardian_push'],
-            message:
-              'Auth0 CIBA initiated. An email and Guardian push notification have been sent. Waiting for your approval…',
-            status: 'pending',
+            message: 'Demo upgrade approved. No CIBA email or Guardian push was sent.',
           }
         },
       }),
