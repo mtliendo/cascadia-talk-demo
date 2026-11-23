@@ -15,7 +15,11 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 import { hasPendingApproval } from '@/lib/chat-approvals'
-import { CHAT_CAPACITY_REACHED } from '@/lib/chat-errors'
+import {
+  CHAT_CAPACITY_PAUSE_MS,
+  CHAT_CAPACITY_REACHED,
+  getChatCapacityPauseDeadline,
+} from '@/lib/chat-errors'
 import {
   ArrowUp,
   Bot,
@@ -63,12 +67,41 @@ function Chat({ userInitials, storageKey }: ChatProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [input, setInput] = useState('')
   const [initialMessages] = useState(() => loadStoredMessages(storageKey))
+  const capacityStorageKey = `${storageKey}:capacity-paused-until`
+  const [capacityPausedUntil, setCapacityPausedUntil] = useState(() => {
+    try {
+      return getChatCapacityPauseDeadline(window.sessionStorage.getItem(capacityStorageKey))
+    } catch {
+      return 0
+    }
+  })
 
   const { messages, sendMessage, status, error, setMessages, addToolApprovalResponse } = useChat({
     messages: initialMessages,
     transport: new DefaultChatTransport({ api: '/api/chat' }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+    onError(error) {
+      if (error.message !== CHAT_CAPACITY_REACHED) return
+
+      const deadline = Date.now() + CHAT_CAPACITY_PAUSE_MS
+      setCapacityPausedUntil(deadline)
+      try {
+        window.sessionStorage.setItem(capacityStorageKey, String(deadline))
+      } catch {
+        // The current view still pauses when session storage is unavailable.
+      }
+    },
   })
+
+  useEffect(() => {
+    if (!capacityPausedUntil) return
+
+    const timeout = window.setTimeout(() => {
+      setCapacityPausedUntil(0)
+    }, Math.max(0, capacityPausedUntil - Date.now()))
+
+    return () => window.clearTimeout(timeout)
+  }, [capacityPausedUntil])
 
   useEffect(() => {
     try {
@@ -87,12 +120,13 @@ function Chat({ userInitials, storageKey }: ChatProps) {
 
   const isLoading = status === 'streaming' || status === 'submitted'
   const approvalPending = hasPendingApproval(messages.at(-1))
-  const capacityReached = error?.message === CHAT_CAPACITY_REACHED
+  const capacityReached = capacityPausedUntil > 0
+  const hasOtherError = error && error.message !== CHAT_CAPACITY_REACHED
   const canSend = !isLoading && !approvalPending && !capacityReached
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, error])
+  }, [messages, error, capacityReached])
 
   const suggestions = [
     'Find me a flight from San Francisco to Chicago today',
@@ -181,12 +215,12 @@ function Chat({ userInitials, storageKey }: ChatProps) {
           </div>
         )}
 
-        {error && (
+        {(capacityReached || hasOtherError) && (
           <div role="alert" className="flex items-start gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3">
             <AlertCircle className="w-4 h-4 shrink-0" />
             {capacityReached ? (
               <div className="space-y-1">
-                <p>Live chat has reached this demo&apos;s monthly usage limit. Come back later, or explore how the demo works.</p>
+                <p>Live chat has reached this demo&apos;s monthly usage limit. Try again in a few minutes, or explore how the demo works.</p>
                 <Link className="underline" href="/#patterns">See the four approval steps</Link>
               </div>
             ) : 'Something went wrong. Please try again.'}
