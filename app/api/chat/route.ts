@@ -5,6 +5,7 @@ import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { auth0, getGoogleToken } from '@/lib/auth0'
 import { hasPendingApproval } from '@/lib/chat-approvals'
+import { getChatStreamError } from '@/lib/chat-errors'
 import { findFlights, getFlightById, generateSeats, applyPromo, getSeatUpgrade } from '@/lib/flights'
 
 const heldBookingSchema = z.object({
@@ -317,5 +318,5 @@ Be conversational, helpful, and transparent about what you're doing and why you'
     },
   })
 
-  return result.toUIMessageStreamResponse()
+  return result.toUIMessageStreamResponse({ onError: getChatStreamError })
 }

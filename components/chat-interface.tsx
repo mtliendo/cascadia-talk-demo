@@ -1,6 +1,7 @@
 'use client'
 
 import { useChat } from '@ai-sdk/react'
+import Link from 'next/link'
 import {
   DefaultChatTransport,
   isToolOrDynamicToolUIPart,
@@ -14,6 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 import { hasPendingApproval } from '@/lib/chat-approvals'
+import { CHAT_CAPACITY_REACHED } from '@/lib/chat-errors'
 import {
   ArrowUp,
   Bot,
@@ -85,11 +87,12 @@ function Chat({ userInitials, storageKey }: ChatProps) {
 
   const isLoading = status === 'streaming' || status === 'submitted'
   const approvalPending = hasPendingApproval(messages.at(-1))
-  const canSend = !isLoading && !approvalPending
+  const capacityReached = error?.message === CHAT_CAPACITY_REACHED
+  const canSend = !isLoading && !approvalPending && !capacityReached
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, error])
 
   const suggestions = [
     'Find me a flight from San Francisco to Chicago today',
@@ -148,7 +151,8 @@ function Chat({ userInitials, storageKey }: ChatProps) {
                 <button
                   key={s}
                   onClick={() => handleSend(s)}
-                  className="text-left text-sm px-4 py-3 rounded-xl border border-border bg-muted/40 hover:bg-muted hover:border-primary/30 transition-colors text-foreground"
+                  disabled={!canSend}
+                  className="text-left text-sm px-4 py-3 rounded-xl border border-border bg-muted/40 hover:bg-muted hover:border-primary/30 transition-colors text-foreground disabled:opacity-50"
                 >
                   {s}
                 </button>
@@ -162,7 +166,7 @@ function Chat({ userInitials, storageKey }: ChatProps) {
             key={message.id}
             message={message}
             userInitials={userInitials}
-            respondToApproval={index === messages.length - 1 && !isLoading ? addToolApprovalResponse : undefined}
+            respondToApproval={index === messages.length - 1 && !isLoading && !capacityReached ? addToolApprovalResponse : undefined}
           />
         ))}
 
@@ -178,9 +182,14 @@ function Chat({ userInitials, storageKey }: ChatProps) {
         )}
 
         {error && (
-          <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3">
+          <div role="alert" className="flex items-start gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3">
             <AlertCircle className="w-4 h-4 shrink-0" />
-            Something went wrong. Please try again.
+            {capacityReached ? (
+              <div className="space-y-1">
+                <p>Live chat has reached this demo&apos;s monthly usage limit. Come back later, or explore how the demo works.</p>
+                <Link className="underline" href="/#patterns">See the four approval steps</Link>
+              </div>
+            ) : 'Something went wrong. Please try again.'}
           </div>
         )}
 
@@ -195,8 +204,8 @@ function Chat({ userInitials, storageKey }: ChatProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={approvalPending ? 'Approve or decline to continue…' : 'Ask me to find or book a flight…'}
-            disabled={approvalPending}
+            placeholder={capacityReached ? 'Live chat is paused' : approvalPending ? 'Approve or decline to continue…' : 'Ask me to find or book a flight…'}
+            disabled={approvalPending || capacityReached}
             rows={1}
             className="flex-1 bg-transparent resize-none outline-none text-sm text-foreground placeholder:text-muted-foreground leading-relaxed max-h-32 overflow-y-auto"
           />
