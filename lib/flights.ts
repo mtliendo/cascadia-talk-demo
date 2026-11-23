@@ -28,16 +28,7 @@ export type Seat = {
   price: number
 }
 
-// Demo flights always depart "today" (in the local timezone of whoever is
-// running the demo) so the data never quietly goes stale on stage.
-function todayAt(hours: number, minutes: number): string {
-  const d = new Date()
-  d.setHours(hours, minutes, 0, 0)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`
-}
-
-export const flights: Flight[] = [
+const schedules: Flight[] = [
   {
     id: 'AA-1102',
     airline: 'American Airlines',
@@ -46,8 +37,8 @@ export const flights: Flight[] = [
     originCode: 'SFO',
     destination: 'Chicago',
     destinationCode: 'ORD',
-    departureTime: todayAt(8, 30),
-    arrivalTime: todayAt(14, 45),
+    departureTime: '08:30:00',
+    arrivalTime: '14:45:00',
     duration: '4h 15m',
     price: 289,
     availableSeats: 14,
@@ -63,8 +54,8 @@ export const flights: Flight[] = [
     originCode: 'SFO',
     destination: 'Chicago',
     destinationCode: 'ORD',
-    departureTime: todayAt(11, 0),
-    arrivalTime: todayAt(17, 10),
+    departureTime: '11:00:00',
+    arrivalTime: '17:10:00',
     duration: '4h 10m',
     price: 314,
     availableSeats: 6,
@@ -78,8 +69,8 @@ export const flights: Flight[] = [
     originCode: 'SFO',
     destination: 'Chicago',
     destinationCode: 'ORD',
-    departureTime: todayAt(14, 45),
-    arrivalTime: todayAt(20, 55),
+    departureTime: '14:45:00',
+    arrivalTime: '20:55:00',
     duration: '4h 10m',
     price: 272,
     availableSeats: 22,
@@ -88,6 +79,15 @@ export const flights: Flight[] = [
     promoDiscount: 15,
   },
 ]
+
+function getFlights(now = new Date()): Flight[] {
+  const date = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Los_Angeles' }).format(now)
+  return schedules.map(flight => ({
+    ...flight,
+    departureTime: `${date}T${flight.departureTime}`,
+    arrivalTime: `${date}T${flight.arrivalTime}`,
+  }))
+}
 
 export function generateSeats(flightId: string): Seat[] {
   const seats: Seat[] = []
@@ -143,7 +143,7 @@ export function generateSeats(flightId: string): Seat[] {
 export function findFlights(origin: string, destination: string): Flight[] {
   const o = origin.toLowerCase()
   const d = destination.toLowerCase()
-  return flights.filter(
+  return getFlights().filter(
     (f) =>
       (f.origin.toLowerCase().includes(o) || f.originCode.toLowerCase().includes(o)) &&
       (f.destination.toLowerCase().includes(d) ||
@@ -151,8 +151,17 @@ export function findFlights(origin: string, destination: string): Flight[] {
   )
 }
 
-export function getFlightById(id: string): Flight | undefined {
-  return flights.find((f) => f.id === id)
+export function getFlightById(id: string, now?: Date): Flight | undefined {
+  return getFlights(now).find((f) => f.id === id)
+}
+
+export function getSeatUpgrade(flightId: string, seatId: string) {
+  if (!getFlightById(flightId)) return
+  const seats = generateSeats(flightId)
+  const currentSeat = seats.find(seat => seat.id === seatId && seat.available)
+  if (!currentSeat || currentSeat.exitRow) return
+  const upgradeSeat = seats.find(seat => seat.available && seat.exitRow && seat.type === currentSeat.type)
+  if (upgradeSeat) return { currentSeat: currentSeat.id, upgradeSeat: upgradeSeat.id }
 }
 
 export function applyPromo(flight: Flight, code: string): number {

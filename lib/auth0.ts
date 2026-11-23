@@ -1,8 +1,17 @@
 import { Auth0Client } from '@auth0/nextjs-auth0/server'
 
 export const auth0 = new Auth0Client({
+  enableAccessTokenEndpoint: false,
   enableConnectAccountEndpoint: true,
+  authorizationParameters: { scope: 'openid profile email offline_access' },
+  session: { rolling: false, absoluteDuration: 8 * 60 * 60 },
 })
+
+export const googleConnection = process.env.AUTH0_GOOGLE_CONNECTION ?? 'google-oauth2'
+export const googleConnectUrl = `/auth/connect?${new URLSearchParams({
+  connection: googleConnection,
+  returnTo: '/settings',
+})}`
 
 export async function getGoogleToken(): Promise<
   { token: string } | { error: string; status: number }
@@ -12,7 +21,7 @@ export async function getGoogleToken(): Promise<
 
   try {
     const { token } = await auth0.getAccessTokenForConnection({
-      connection: 'google-oauth2',
+      connection: googleConnection,
     })
     return { token }
   } catch {
